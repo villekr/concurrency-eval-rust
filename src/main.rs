@@ -79,7 +79,6 @@ async fn processor(event: Event) -> Result<String, Error> {
     }
 
     let responses: Vec<Result<Option<String>, Error>> = get_object_futures
-        .map(|result| result)
         .collect()
         .await;
     if find.is_some() {
@@ -90,7 +89,7 @@ async fn processor(event: Event) -> Result<String, Error> {
         {
             Ok(result)
         } else {
-            Ok("Magic string not found.".parse().unwrap())
+            Ok("Magic string not found.".to_string())
         };
     }
     Ok(responses.len().to_string())
