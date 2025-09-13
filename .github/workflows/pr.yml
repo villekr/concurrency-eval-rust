@@ -1,36 +1,26 @@
-name: PR CI
+name: PR Format and Lint (Rust)
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, "update" ]
     types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   format-and-lint-check:
-    name: Go format and lint check
-    runs-on: ubuntu-24.04-arm
+    name: format-and-lint-check
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - name: Set up Rust 1.89.0 (with rustfmt and clippy)
+        uses: dtolnay/rust-toolchain@master
         with:
-          go-version: '1.25.x'
-          cache: true
+          toolchain: 1.89.0
+          components: rustfmt, clippy
 
-      - name: Download modules
-        run: go mod download
+      - name: Run rustfmt (check)
+        run: cargo fmt --all -- --check
 
-      - name: Formatting check (gofmt)
-        run: |
-          set -euo pipefail
-          CHANGED=$(gofmt -l .)
-          if [ -n "$CHANGED" ]; then
-            echo "The following files need gofmt:" >&2
-            echo "$CHANGED" >&2
-            exit 1
-          fi
-
-      - name: Vet
-        run: go vet ./...
+      - name: Run clippy (deny warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings

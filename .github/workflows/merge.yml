@@ -2,12 +2,11 @@ name: Merge CI
 
 on:
   push:
-    branches: [ main, "1.1" ]
+    branches: [ main, "update" ]
 
 jobs:
   package-and-upload:
-    name: Package Go binary and upload to S3
-    # runs-on: ubuntu-24.04 # we don't want to rely directly on 'ubuntu-latest'
+    name: Package Rust Lambda and upload to S3
     runs-on: ubuntu-24.04-arm # we don't want to rely directly on 'ubuntu-latest'
     permissions:
       id-token: write
@@ -16,7 +15,7 @@ jobs:
       ARTIFACT_BUCKET_NAME: ${{ vars.ARTIFACT_BUCKET_NAME || secrets.ARTIFACT_BUCKET_NAME }}
       WRITER_ROLE_ARN: ${{ vars.WRITER_ROLE_ARN || secrets.WRITER_ROLE_ARN }}
       AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION }}
-      ARTIFACT_PREFIX: concurrency-eval-go
+      ARTIFACT_PREFIX: concurrency-eval-rust
     outputs:
       code_s3_key: ${{ steps.upload.outputs.code_s3_key }}
       code_s3_version: ${{ steps.upload.outputs.code_s3_version }}
@@ -32,28 +31,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - name: Set up Rust 1.89.0
+        uses: dtolnay/rust-toolchain@master
         with:
-          go-version: '1.25.x'
-          cache: true
+          toolchain: 1.89.0
+
+      - name: Install cargo-lambda
+        run: |
+          curl -Ls https://github.com/cargo-lambda/cargo-lambda/releases/latest/download/cargo-lambda-installer.sh \
+            | bash -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Build Linux/arm64 bootstrap and zip
         run: |
           set -euxo pipefail
-          mkdir -p build
-          pushd cmd/lambda
-          # Build for Linux/arm64 with AWS Lambda norpc tag, outputting 'bootstrap'
-          GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -o bootstrap main.go
+          # Build the AWS Lambda binary for arm64 in release mode
+          cargo lambda build --arm64 --release
           # Ensure zip is available (Ubuntu runners usually have it, but install if missing)
           if ! command -v zip >/dev/null 2>&1; then
             sudo apt-get update
             sudo apt-get install -y zip
           fi
-          # Zip as function.zip containing only the bootstrap file
-          zip -q function.zip bootstrap
-          popd
-          mv cmd/lambda/function.zip build/function.zip
+          # Package the bootstrap into the expected zip
+          zip -j ./target/lambda/concurrency_eval/bootstrap.zip ./target/lambda/concurrency_eval/bootstrap
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -69,9 +69,10 @@ jobs:
           PREFIX: ${{ env.ARTIFACT_PREFIX }}
         run: |
           set -euxo pipefail
-          ZIP_NAME="function.zip"
+          ZIP_PATH="./target/lambda/concurrency_eval/bootstrap.zip"
+          ZIP_NAME="bootstrap.zip"
           FUNC_KEY="${PREFIX}/${ZIP_NAME}"
-          FUNC_VERSION_ID=$(aws s3api put-object --bucket "$BUCKET" --key "$FUNC_KEY" --body build/${ZIP_NAME} --query 'VersionId' --output text)
+          FUNC_VERSION_ID=$(aws s3api put-object --bucket "$BUCKET" --key "$FUNC_KEY" --body "$ZIP_PATH" --query 'VersionId' --output text)
           echo "code_s3_key=${FUNC_KEY}" >> "$GITHUB_OUTPUT"
           echo "code_s3_version=${FUNC_VERSION_ID}" >> "$GITHUB_OUTPUT"
 

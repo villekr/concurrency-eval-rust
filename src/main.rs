@@ -3,6 +3,8 @@ use aws_sdk_s3::Client;
 use futures::stream::{FuturesUnordered, StreamExt};
 use lambda_runtime::{run, service_fn, Error, LambdaEvent};
 use serde::{Deserialize, Serialize};
+use memchr::memmem;
+use std::sync::Arc;
 
 #[derive(Deserialize)]
 pub struct Event {
@@ -46,42 +48,50 @@ async fn processor(event: Event) -> Result<String, Error> {
     let shared_config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&shared_config);
 
-    let bucket_name = event.s3_bucket_name;
+    let bucket: Arc<str> = Arc::from(event.s3_bucket_name);
     let folder = event.folder;
-    let find = event.find.as_deref();
+    let find_pat: Option<Arc<[u8]>> = event
+        .find
+        .as_deref()
+        .map(|s| Arc::<[u8]>::from(s.as_bytes()));
 
-    let response = client
+    let mut get_object_futures = FuturesUnordered::new();
+
+    // Use paginator to handle all objects (multiple pages)
+    let mut paginator = client
         .list_objects_v2()
-        .bucket(&bucket_name)
+        .bucket(&*bucket)
         .prefix(&folder)
-        .send()
-        .await?;
+        .into_paginator()
+        .send();
 
-    let keys = response
-        .contents.unwrap_or_default()
-        .into_iter()
-        .filter_map(|obj| obj.key)
-        .collect::<Vec<String>>();
+    while let Some(page) = paginator.next().await {
+        let page = page?;
+        for obj in page.contents().unwrap_or_default().iter() {
+            if let Some(key) = obj.key() {
+                let client = client.clone();
+                let bucket = bucket.clone();
+                let key_owned = key.to_string();
+                let find_pat_cloned = find_pat.clone();
 
-    let get_object_futures = FuturesUnordered::new();
-
-    for key in keys {
-        let client = client.clone();
-        let bucket_name = bucket_name.clone();
-        let key = key.clone();
-
-        let get_object_future = async move {
-            let resp = get(&client, &bucket_name, &key, find).await?;
-            Ok::<Option<String>, Error>(resp)
-        };
-
-        get_object_futures.push(get_object_future);
+                let fut = async move {
+                    let resp = get(
+                        &client,
+                        bucket.as_ref(),
+                        &key_owned,
+                        find_pat_cloned.as_deref(),
+                    )
+                    .await?;
+                    Ok::<Option<String>, Error>(resp)
+                };
+                get_object_futures.push(fut);
+            }
+        }
     }
 
-    let responses: Vec<Result<Option<String>, Error>> = get_object_futures
-        .collect()
-        .await;
-    if find.is_some() {
+    let responses: Vec<Result<Option<String>, Error>> = get_object_futures.collect().await;
+
+    if find_pat.is_some() {
         return if let Some(result) = responses
             .into_iter()
             .find_map(Result::transpose)
@@ -89,7 +99,7 @@ async fn processor(event: Event) -> Result<String, Error> {
         {
             Ok(result)
         } else {
-            Ok("Magic string not found.".to_string())
+            Ok("None".to_string())
         };
     }
     Ok(responses.len().to_string())
@@ -99,7 +109,7 @@ async fn get(
     client: &Client,
     bucket_name: &str,
     key: &str,
-    find: Option<&str>,
+    find: Option<&[u8]>,
 ) -> Result<Option<String>, Error> {
     let resp = client
         .get_object()
@@ -108,15 +118,15 @@ async fn get(
         .send()
         .await?;
 
+    // Fully read the body into memory as required
     let aggregated_bytes = resp.body.collect().await?;
     let data_bytes = aggregated_bytes.into_bytes();
-    let data_vec = data_bytes.to_vec();
-    let response_body = String::from_utf8(data_vec)?;
 
-    if let Some(find_str) = find {
-        match response_body.find(find_str) {
-            Some(_) => Ok(Some(key.to_string())),
-            None => Ok(None),
+    if let Some(pattern) = find {
+        if memmem::find(data_bytes.as_ref(), pattern).is_some() {
+            Ok(Some(key.to_string()))
+        } else {
+            Ok(None)
         }
     } else {
         Ok(None)
