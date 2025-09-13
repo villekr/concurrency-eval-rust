@@ -1,0 +1,26 @@
+name: PR Format and Lint (Rust)
+
+on:
+  pull_request:
+    branches: [ main, "update" ]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  format-and-lint-check:
+    name: format-and-lint-check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust 1.89.0 (with rustfmt and clippy)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.89.0
+          components: rustfmt, clippy
+
+      - name: Run rustfmt (check)
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy (deny warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
