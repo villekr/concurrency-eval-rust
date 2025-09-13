@@ -38,8 +38,7 @@ jobs:
 
       - name: Install cargo-lambda
         run: |
-          curl -Ls https://github.com/cargo-lambda/cargo-lambda/releases/latest/download/cargo-lambda-installer.sh \
-            | bash -s -- -y
+          curl -fsSL https://cargo-lambda.info/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Build Linux/arm64 bootstrap and zip
