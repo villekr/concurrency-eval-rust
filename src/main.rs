@@ -1,9 +1,9 @@
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::Client;
 use futures::stream::{FuturesUnordered, StreamExt};
-use lambda_runtime::{run, service_fn, Error, LambdaEvent};
-use serde::{Deserialize, Serialize};
+use lambda_runtime::{Error, LambdaEvent, run, service_fn};
 use memchr::memmem;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 #[derive(Deserialize)]
@@ -45,7 +45,10 @@ pub async fn function_handler(event: LambdaEvent<Event>) -> Result<Response, Err
 async fn processor(event: Event) -> Result<String, Error> {
     let region_provider = RegionProviderChain::default_provider().or_else("eu-north-1");
 
-    let shared_config = aws_config::from_env().region(region_provider).load().await;
+    let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
     let client = Client::new(&shared_config);
 
     let bucket: Arc<str> = Arc::from(event.s3_bucket_name);
@@ -55,6 +58,7 @@ async fn processor(event: Event) -> Result<String, Error> {
         .as_deref()
         .map(|s| Arc::<[u8]>::from(s.as_bytes()));
 
+    #[allow(unused_mut)]
     let mut get_object_futures = FuturesUnordered::new();
 
     // Use paginator to handle all objects (multiple pages)
@@ -67,7 +71,7 @@ async fn processor(event: Event) -> Result<String, Error> {
 
     while let Some(page) = paginator.next().await {
         let page = page?;
-        for obj in page.contents().unwrap_or_default().iter() {
+        for obj in page.contents().iter() {
             if let Some(key) = obj.key() {
                 let client = client.clone();
                 let bucket = bucket.clone();
