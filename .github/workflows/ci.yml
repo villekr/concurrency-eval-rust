@@ -1,0 +1,32 @@
+name: Rust CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust 1.89.0
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.89.0
+
+      - name: Install cargo-lambda
+        run: cargo install cargo-lambda
+
+      - name: Build Lambda (arm64 release)
+        run: cargo lambda build --arm64 --release
+
+      - name: Package bootstrap
+        run: zip -j ./target/lambda/concurrency_eval/bootstrap.zip ./target/lambda/concurrency_eval/bootstrap
+
+      - name: Upload bootstrap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-bootstrap
+          path: ./target/lambda/concurrency_eval/bootstrap.zip
