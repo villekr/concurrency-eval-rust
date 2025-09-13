@@ -56,8 +56,8 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y zip
           fi
-          # Package the bootstrap into the expected zip
-          zip -j ./target/lambda/concurrency_eval/bootstrap.zip ./target/lambda/concurrency_eval/bootstrap
+          # Package the bootstrap into the expected zip (directory is named after Cargo package: concurrency_eval_rust)
+          zip -j ./target/lambda/concurrency_eval_rust/bootstrap.zip ./target/lambda/concurrency_eval_rust/bootstrap
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -73,7 +73,7 @@ jobs:
           PREFIX: ${{ env.ARTIFACT_PREFIX }}
         run: |
           set -euxo pipefail
-          ZIP_PATH="./target/lambda/concurrency_eval/bootstrap.zip"
+          ZIP_PATH="./target/lambda/concurrency_eval_rust/bootstrap.zip"
           ZIP_NAME="bootstrap.zip"
           FUNC_KEY="${PREFIX}/${ZIP_NAME}"
           FUNC_VERSION_ID=$(aws s3api put-object --bucket "$BUCKET" --key "$FUNC_KEY" --body "$ZIP_PATH" --query 'VersionId' --output text)
