@@ -61,35 +61,33 @@ async fn processor(event: Event) -> Result<String, Error> {
     #[allow(unused_mut)]
     let mut get_object_futures = FuturesUnordered::new();
 
-    // Use paginator to handle all objects (multiple pages)
-    let mut paginator = client
+    // List up to 1000 objects in a single request (bucket has max 1000 objects by requirement)
+    let resp = client
         .list_objects_v2()
         .bucket(&*bucket)
         .prefix(&folder)
-        .into_paginator()
-        .send();
+        .max_keys(1000)
+        .send()
+        .await?;
 
-    while let Some(page) = paginator.next().await {
-        let page = page?;
-        for obj in page.contents().iter() {
-            if let Some(key) = obj.key() {
-                let client = client.clone();
-                let bucket = bucket.clone();
-                let key_owned = key.to_string();
-                let find_pat_cloned = find_pat.clone();
+    for obj in resp.contents() {
+        if let Some(key) = obj.key() {
+            let client = client.clone();
+            let bucket = bucket.clone();
+            let key_owned = key.to_string();
+            let find_pat_cloned = find_pat.clone();
 
-                let fut = async move {
-                    let resp = get(
-                        &client,
-                        bucket.as_ref(),
-                        &key_owned,
-                        find_pat_cloned.as_deref(),
-                    )
-                    .await?;
-                    Ok::<Option<String>, Error>(resp)
-                };
-                get_object_futures.push(fut);
-            }
+            let fut = async move {
+                let resp = get(
+                    &client,
+                    bucket.as_ref(),
+                    &key_owned,
+                    find_pat_cloned.as_deref(),
+                )
+                .await?;
+                Ok::<Option<String>, Error>(resp)
+            };
+            get_object_futures.push(fut);
         }
     }
 
