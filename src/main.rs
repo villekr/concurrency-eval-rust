@@ -91,20 +91,26 @@ async fn processor(event: Event) -> Result<String, Error> {
         }
     }
 
-    let responses: Vec<Result<Option<String>, Error>> = get_object_futures.collect().await;
-
+    // If searching, we must still fully read all bodies; track the first match while draining all
     if find_pat.is_some() {
-        return if let Some(result) = responses
-            .into_iter()
-            .find_map(Result::transpose)
-            .and_then(Result::ok)
-        {
-            Ok(result)
-        } else {
-            Ok("None".to_string())
-        };
+        let mut first_match: Option<String> = None;
+        while let Some(res) = get_object_futures.next().await {
+            if let Ok(Some(key)) = res {
+                if first_match.is_none() {
+                    first_match = Some(key);
+                }
+            }
+        }
+        return Ok(first_match.unwrap_or_else(|| "None".to_string()));
     }
-    Ok(responses.len().to_string())
+
+    // Otherwise, ensure we fully read all bodies and count processed objects
+    let mut count = 0usize;
+    while let Some(_res) = get_object_futures.next().await {
+        // We don't need the key; just ensure the future completed (body fully read)
+        count += 1;
+    }
+    Ok(count.to_string())
 }
 
 async fn get(
