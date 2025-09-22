@@ -95,7 +95,9 @@ async fn processor(event: Event) -> Result<String, Error> {
     if find_pat.is_some() {
         let mut first_match: Option<String> = None;
         while let Some(res) = get_object_futures.next().await {
-            if let Ok(Some(key)) = res && first_match.is_none() {
+            if let Ok(Some(key)) = res
+                && first_match.is_none()
+            {
                 first_match = Some(key);
             }
         }
