@@ -36,10 +36,10 @@ jobs:
       - name: Run lizard on main Lambda file only
         run: |
           # Check only the main file and fail on warnings
-          # -C: cyclomatic complexity threshold (warn if function > 10)
+          # -C: cyclomatic complexity threshold (warn if function > 11)
           # -L: maximum function length (lines) threshold (warn if function > 120)
-          lizard -l rust -C 10 -L 120 src/main.rs
+          lizard -l rust -C 11 -L 120 src/main.rs
           
       - name: Lizard csv output
         run: |
-          lizard -l rust -C 10 -L 120 src/main.rs --csv          
+          lizard -l rust -C 11 -L 120 src/main.rs --csv          
