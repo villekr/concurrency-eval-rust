@@ -2,7 +2,7 @@
 Rust code for [How Do You Like Your Lambda Concurrency](https://ville-karkkainen.medium.com/how-do-you-like-your-aws-lambda-concurrency-part-1-introduction-7a3f7ecfe4b5)-blog series.
 
 # Requirements
-* Rust 1.89.0
+* Rust 1.98.1
 
 The target is to implement the following pseudocode as effectively as possible using language-specific idioms and constrains to achieve concurrency/parallelism.
 Mandatory requirements:

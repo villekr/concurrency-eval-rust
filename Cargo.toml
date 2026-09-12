@@ -6,12 +6,28 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aws-config = "1"
-aws-sdk-s3 = "1"
+# Disable default features to drop the legacy hyper-0.14 / rustls-0.21 TLS connector
+# (pulled in via the `rustls` feature). Re-enable only the modern rustls-aws-lc
+# connector (`default-https-client`) plus the features we actually use. This removes
+# the vulnerable transitive crates (h2 0.3.x, rustls-webpki 0.101.x) so the deployed
+# artifact has zero Amazon Inspector findings.
+aws-config = { version = "1", default-features = false, features = [
+    "behavior-version-latest",
+    "default-https-client",
+    "rt-tokio",
+    "credentials-process",
+    "sso",
+] }
+aws-sdk-s3 = { version = "1", default-features = false, features = [
+    "default-https-client",
+    "http-1x",
+    "rt-tokio",
+    "sigv4a",
+] }
 futures = "0.3"
 bytes = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros"] }
-lambda_runtime = "0.11"
+lambda_runtime = "1"
 memchr = "2"

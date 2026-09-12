@@ -31,10 +31,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Rust 1.89.0
+      - name: Set up Rust 1.98.1
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.89.0
+          toolchain: 1.98.1
 
       - name: Install Zig 0.13.0
         uses: goto-bus-stop/setup-zig@v2
